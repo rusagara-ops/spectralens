@@ -1,6 +1,7 @@
 """FastAPI app entry point for SpectraLens."""
 
 import os
+import asyncio
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -23,16 +24,23 @@ env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(env_path)
 
 if not os.getenv("ANTHROPIC_API_KEY"):
-    print("\n⚠️  WARNING: ANTHROPIC_API_KEY not set. AI analysis will fail.")
-    print("   Add your key to spectralens/.env\n")
+    print("\n  WARNING: ANTHROPIC_API_KEY not set. AI analysis will fail.")
+    print("  Add your key to spectralens/.env\n")
 
 app = FastAPI(title="SpectraLens API", version="1.0.0")
 
+# CORS — restricted to known frontend origins for demo
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    os.getenv("FRONTEND_URL", "http://localhost:5173"),
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -40,11 +48,15 @@ app.add_middleware(
 print("Generating synthetic hyperspectral data...")
 DEMO_CUBE = generate_demo_cube()
 WAVELENGTHS = get_wavelengths()
+BAND_COUNT = len(WAVELENGTHS)
 DEMO_NDVI = compute_ndvi(DEMO_CUBE, WAVELENGTHS)
 print(f"Demo cube ready: {DEMO_CUBE.shape}, NDVI range: {DEMO_NDVI.min():.2f} to {DEMO_NDVI.max():.2f}")
 
-# Cache for AI analysis result
+# Thread-safe cache for AI analysis
 _analysis_cache = None
+_analysis_lock = asyncio.Lock()
+
+MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
 
 
 @app.get("/api/health")
@@ -57,7 +69,7 @@ def cube_info():
     return {
         "shape": list(DEMO_CUBE.shape),
         "wavelengths": WAVELENGTHS,
-        "band_count": 60,
+        "band_count": BAND_COUNT,
         "spatial_resolution": "0.1m per pixel (simulated)",
         "sensor": "Demo VNIR Sensor (400-1000nm)",
     }
@@ -65,8 +77,8 @@ def cube_info():
 
 @app.get("/api/demo/band/{band_index}")
 def get_band(band_index: int):
-    if band_index < 0 or band_index > 59:
-        raise HTTPException(status_code=400, detail="band_index must be 0-59")
+    if band_index < 0 or band_index >= BAND_COUNT:
+        raise HTTPException(status_code=400, detail=f"band_index must be 0-{BAND_COUNT - 1}")
     image_b64 = render_band_image(DEMO_CUBE, band_index)
     return {
         "image_base64": image_b64,
@@ -82,8 +94,8 @@ def false_color(
     b_band: int = Query(default=10),
 ):
     for b in [r_band, g_band, b_band]:
-        if b < 0 or b > 59:
-            raise HTTPException(status_code=400, detail="Band indices must be 0-59")
+        if b < 0 or b >= BAND_COUNT:
+            raise HTTPException(status_code=400, detail=f"Band indices must be 0-{BAND_COUNT - 1}")
     image_b64 = render_false_color(DEMO_CUBE, r_band, g_band, b_band)
     return {
         "image_base64": image_b64,
@@ -118,31 +130,38 @@ def pixel_spectrum(
 @app.post("/api/demo/analyze")
 async def analyze_field():
     global _analysis_cache
-    if _analysis_cache is not None:
-        return _analysis_cache
 
-    if not os.getenv("ANTHROPIC_API_KEY"):
-        raise HTTPException(
-            status_code=500,
-            detail="ANTHROPIC_API_KEY not set. Add it to spectralens/.env",
-        )
+    async with _analysis_lock:
+        if _analysis_cache is not None:
+            return _analysis_cache
 
-    zone_stats = compute_zone_statistics(DEMO_CUBE, DEMO_NDVI)
-    ndvi_stats = {
-        "overall_mean_ndvi": zone_stats["overall_mean_ndvi"],
-        "overall_min_ndvi": zone_stats["overall_min_ndvi"],
-        "overall_max_ndvi": zone_stats["overall_max_ndvi"],
-    }
+        if not os.getenv("ANTHROPIC_API_KEY"):
+            raise HTTPException(
+                status_code=500,
+                detail="ANTHROPIC_API_KEY not set. Add it to spectralens/.env",
+            )
 
-    result = await interpret_field(zone_stats, WAVELENGTHS, ndvi_stats)
-    _analysis_cache = result
-    return result
+        zone_stats = compute_zone_statistics(DEMO_CUBE, DEMO_NDVI)
+        ndvi_stats = {
+            "overall_mean_ndvi": zone_stats["overall_mean_ndvi"],
+            "overall_min_ndvi": zone_stats["overall_min_ndvi"],
+            "overall_max_ndvi": zone_stats["overall_max_ndvi"],
+        }
+
+        result = await interpret_field(zone_stats, WAVELENGTHS, ndvi_stats)
+        _analysis_cache = result
+        return result
 
 
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...)):
+    # Read a small chunk to check size without loading entire file
+    contents = await file.read(MAX_UPLOAD_SIZE + 1)
+    if len(contents) > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=413, detail="File too large. Maximum size is 50 MB.")
     return {
         "message": "File received. Full upload support coming soon.",
         "filename": file.filename,
+        "size_bytes": len(contents),
         "redirect": "demo",
     }
