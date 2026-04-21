@@ -59,7 +59,8 @@ export default function SpectrumChart({ pixelSpectrum }) {
               tick={{ fontSize: 11, fill: '#94a3b8' }}
             />
             <YAxis
-              domain={[0, 1]}
+              domain={[0, 'auto']}
+              allowDataOverflow={false}
               label={{ value: 'Reflectance', angle: -90, position: 'insideLeft', offset: -5, style: { fontSize: 12, fill: '#64748b' } }}
               tick={{ fontSize: 11, fill: '#94a3b8' }}
             />
