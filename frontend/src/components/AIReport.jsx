@@ -1,0 +1,207 @@
+import React, { useState, useEffect } from 'react'
+
+const LOADING_MESSAGES = [
+  'Computing NDVI indices...',
+  'Mapping spectral anomalies...',
+  'Classifying vegetation health zones...',
+  'Analyzing 600,000 spectral data points...',
+  'Identifying nitrogen absorption patterns...',
+  'Detecting water stress signatures...',
+  'Generating agronomic report...',
+]
+
+function HealthBar({ value }) {
+  const color = value >= 60 ? 'bg-green-500' : value >= 40 ? 'bg-yellow-500' : 'bg-red-500'
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex-1 h-3 bg-slate-200 rounded-full overflow-hidden">
+        <div className={`h-full ${color} rounded-full transition-all duration-1000`} style={{ width: `${value}%` }}></div>
+      </div>
+      <span className="text-sm font-mono text-slate-500">{value}%</span>
+    </div>
+  )
+}
+
+function SeverityBadge({ severity }) {
+  const colors = {
+    None: 'bg-green-100 text-green-700',
+    Mild: 'bg-yellow-100 text-yellow-700',
+    Moderate: 'bg-orange-100 text-orange-700',
+    Severe: 'bg-red-100 text-red-700',
+  }
+  return (
+    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colors[severity] || 'bg-slate-100 text-slate-600'}`}>
+      {severity}
+    </span>
+  )
+}
+
+function StatusBadge({ status }) {
+  const colors = {
+    Healthy: 'bg-green-100 text-green-700 border-green-200',
+    'Nitrogen Deficient': 'bg-yellow-100 text-yellow-700 border-yellow-200',
+    'Water Stressed': 'bg-orange-100 text-orange-700 border-orange-200',
+    'Pest Damage': 'bg-red-100 text-red-700 border-red-200',
+  }
+  return (
+    <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${colors[status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+      {status}
+    </span>
+  )
+}
+
+export default function AIReport({ analysisData, isAnalyzing, onRunAnalysis }) {
+  const [loadingMsgIdx, setLoadingMsgIdx] = useState(0)
+
+  useEffect(() => {
+    if (!isAnalyzing) return
+    const timer = setInterval(() => {
+      setLoadingMsgIdx((prev) => (prev + 1) % LOADING_MESSAGES.length)
+    }, 2000)
+    return () => clearInterval(timer)
+  }, [isAnalyzing])
+
+  // Placeholder — before analysis
+  if (!analysisData && !isAnalyzing) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="w-16 h-16 bg-brand/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold text-slate-900 mb-2">AI Field Analysis</h3>
+          <p className="text-sm text-slate-500 mb-6">
+            Run our AI analysis to get a comprehensive crop health report with actionable
+            recommendations — powered by Claude.
+          </p>
+          <button
+            onClick={onRunAnalysis}
+            className="px-6 py-3 bg-brand text-white font-semibold rounded-lg hover:bg-brand-light transition-colors shadow-lg shadow-brand/20"
+          >
+            Run AI Analysis
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Loading state
+  if (isAnalyzing) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center">
+          <div className="relative w-16 h-16 mx-auto mb-6">
+            <div className="absolute inset-0 rounded-full border-4 border-brand/20"></div>
+            <div className="absolute inset-0 rounded-full border-4 border-brand border-t-transparent animate-spin"></div>
+          </div>
+          <h3 className="text-lg font-semibold text-slate-900 mb-2">Analyzing field data...</h3>
+          <p className="text-sm text-brand font-medium animate-pulse">
+            {LOADING_MESSAGES[loadingMsgIdx]}
+          </p>
+          <p className="text-xs text-slate-400 mt-4">This may take 10-15 seconds</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Full report
+  const data = analysisData
+
+  return (
+    <div className="h-full overflow-y-auto pr-2 space-y-5">
+      {/* Header */}
+      <div className="border-b border-slate-200 pb-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-xl font-bold text-slate-900">Field Health Report</h3>
+            <p className="text-xs text-slate-400 mt-0.5">Generated by SpectraLens AI</p>
+          </div>
+          <div className={`text-xs px-3 py-1 rounded-full font-medium ${
+            data.confidence === 'High' ? 'bg-green-100 text-green-700' :
+            data.confidence === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
+            'bg-red-100 text-red-700'
+          }`}>
+            {data.confidence} Confidence
+          </div>
+        </div>
+      </div>
+
+      {/* Executive Summary */}
+      <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+        <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Executive Summary</h4>
+        <p className="text-sm text-slate-700 leading-relaxed">{data.executive_summary}</p>
+      </div>
+
+      {/* Overall Health */}
+      <div>
+        <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Overall Field Health</h4>
+        <div className="flex items-center gap-4">
+          <div className={`text-4xl font-bold ${
+            data.overall_field_health >= 60 ? 'text-green-600' :
+            data.overall_field_health >= 40 ? 'text-yellow-600' :
+            'text-red-600'
+          }`}>
+            {data.overall_field_health}%
+          </div>
+          <div className="flex-1">
+            <HealthBar value={data.overall_field_health} />
+          </div>
+        </div>
+      </div>
+
+      {/* Zone Analysis */}
+      <div>
+        <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Zone Analysis</h4>
+        <div className="grid grid-cols-2 gap-3">
+          {(data.zones || []).map((zone, i) => (
+            <div key={i} className="bg-white rounded-lg border border-slate-200 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-semibold text-slate-800">{zone.name}</span>
+              </div>
+              <div className="flex items-center gap-2 mb-2">
+                <StatusBadge status={zone.health_status} />
+                <SeverityBadge severity={zone.severity} />
+              </div>
+              <div className="text-xs text-slate-500 mb-1">
+                NDVI: <span className="font-mono font-medium">{zone.ndvi?.toFixed(2)}</span>
+                <span className="mx-2 text-slate-300">|</span>
+                {zone.area_percentage}% of field
+              </div>
+              <p className="text-xs text-slate-600 mt-2">{zone.finding}</p>
+              <p className="text-xs text-brand mt-1 font-medium">{zone.recommendation}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Immediate Actions */}
+      <div className="bg-amber-50 rounded-xl p-4 border border-amber-200">
+        <h4 className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-3">Immediate Actions</h4>
+        <ol className="space-y-2">
+          {(data.immediate_actions || []).map((action, i) => (
+            <li key={i} className="flex gap-3 text-sm text-slate-700">
+              <span className="flex-shrink-0 w-6 h-6 bg-amber-200 text-amber-800 rounded-full flex items-center justify-center text-xs font-bold">
+                {i + 1}
+              </span>
+              {action}
+            </li>
+          ))}
+        </ol>
+      </div>
+
+      {/* Bottom stats */}
+      <div className="grid grid-cols-2 gap-3 pb-4">
+        <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+          <h5 className="text-xs font-semibold text-slate-500 uppercase mb-1">Yield Impact</h5>
+          <p className="text-sm text-slate-700">{data.estimated_yield_impact}</p>
+        </div>
+        <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+          <h5 className="text-xs font-semibold text-slate-500 uppercase mb-1">Next Scan</h5>
+          <p className="text-sm text-slate-700">{data.next_scan_recommendation}</p>
+        </div>
+      </div>
+    </div>
+  )
+}
