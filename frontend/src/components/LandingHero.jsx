@@ -1,7 +1,7 @@
 import React from 'react'
 
 const LeafIcon = () => (
-  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#1a5c38" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#1a5c38" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1.55-3.67C11.55 20 17 17.5 19.5 12.5 22 7.5 17 8 17 8z" fill="#1a5c38" opacity="0.15" />
     <path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1.55-3.67C11.55 20 17 17.5 19.5 12.5 22 7.5 17 8 17 8z" />
     <path d="M6 15s3-2 6-2" />
@@ -19,7 +19,7 @@ export default function LandingHero({ onStartDemo }) {
         </div>
         <button
           onClick={onStartDemo}
-          className="px-5 py-2 text-sm font-medium text-brand border border-brand rounded-lg hover:bg-brand hover:text-white transition-colors"
+          className="px-5 py-2 text-sm font-medium text-brand border border-brand rounded-lg hover:bg-brand hover:text-white focus:outline-none focus:ring-2 focus:ring-brand/50 transition-colors"
         >
           Request Demo
         </button>
@@ -27,7 +27,7 @@ export default function LandingHero({ onStartDemo }) {
 
       {/* Hero */}
       <section className="flex-1 flex items-center justify-center px-8 py-16">
-        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
           <div>
             <h1 className="text-5xl font-bold text-slate-900 leading-tight mb-6">
               Your crops are talking.{' '}
@@ -40,13 +40,13 @@ export default function LandingHero({ onStartDemo }) {
             <div className="flex gap-4">
               <button
                 onClick={onStartDemo}
-                className="px-8 py-3 bg-brand text-white font-semibold rounded-lg hover:bg-brand-light transition-colors shadow-lg shadow-brand/20"
+                className="px-8 py-3 bg-brand text-white font-semibold rounded-lg hover:bg-brand-light focus:outline-none focus:ring-2 focus:ring-brand/50 transition-colors shadow-lg shadow-brand/20"
               >
                 See Live Demo &rarr;
               </button>
               <a
                 href="#how-it-works"
-                className="px-8 py-3 text-slate-600 font-semibold rounded-lg border border-slate-200 hover:border-slate-400 transition-colors"
+                className="px-8 py-3 text-slate-600 font-semibold rounded-lg border border-slate-200 hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300 transition-colors"
               >
                 How it works &darr;
               </a>
