@@ -49,9 +49,12 @@ def get_pixel_spectrum(cube: np.ndarray, x: int, y: int, wavelengths: list) -> d
 def render_band_image(cube: np.ndarray, band_index: int) -> str:
     """Render a single band as a grayscale PNG, return as base64 string."""
     band = cube[:, :, band_index]
-    normalized = (band / band.max() * 255).astype(np.uint8) if band.max() > 0 else np.zeros_like(band, dtype=np.uint8)
+    mx = band.max()
+    if mx > 0:
+        normalized = (band / mx * 255).astype(np.uint8)
+    else:
+        normalized = np.zeros_like(band, dtype=np.uint8)
     img = Image.fromarray(normalized, mode="L")
-    # Scale up for better visibility
     img = img.resize((400, 400), Image.NEAREST)
     buf = io.BytesIO()
     img.save(buf, format="PNG")
@@ -87,24 +90,32 @@ def render_ndvi_map(ndvi: np.ndarray) -> str:
     h, w = ndvi.shape
     rgb = np.zeros((h, w, 3), dtype=np.uint8)
 
-    for y in range(h):
-        for x in range(w):
-            v = ndvi[y, x]
-            if v < 0.2:
-                # Red
-                rgb[y, x] = [220, 50, 50]
-            elif v < 0.4:
-                # Yellow (interpolate from red to yellow)
-                t = (v - 0.2) / 0.2
-                rgb[y, x] = [220, int(50 + 170 * t), 50]
-            elif v < 0.6:
-                # Light green (interpolate from yellow to light green)
-                t = (v - 0.4) / 0.2
-                rgb[y, x] = [int(220 - 140 * t), 220, int(50 + 50 * t)]
-            else:
-                # Dark green (interpolate from light green to dark green)
-                t = min((v - 0.6) / 0.3, 1.0)
-                rgb[y, x] = [int(80 - 55 * t), int(220 - 60 * t), int(100 - 60 * t)]
+    # Vectorized color mapping — avoids slow per-pixel Python loop
+    mask_red = ndvi < 0.2
+    mask_yellow = (ndvi >= 0.2) & (ndvi < 0.4)
+    mask_lgreen = (ndvi >= 0.4) & (ndvi < 0.6)
+    mask_dgreen = ndvi >= 0.6
+
+    # Red zone
+    rgb[mask_red] = [220, 50, 50]
+
+    # Yellow zone (interpolate red -> yellow)
+    t = np.clip((ndvi[mask_yellow] - 0.2) / 0.2, 0, 1)
+    rgb[mask_yellow, 0] = 220
+    rgb[mask_yellow, 1] = (50 + 170 * t).astype(np.uint8)
+    rgb[mask_yellow, 2] = 50
+
+    # Light green zone (interpolate yellow -> light green)
+    t = np.clip((ndvi[mask_lgreen] - 0.4) / 0.2, 0, 1)
+    rgb[mask_lgreen, 0] = (220 - 140 * t).astype(np.uint8)
+    rgb[mask_lgreen, 1] = 220
+    rgb[mask_lgreen, 2] = (50 + 50 * t).astype(np.uint8)
+
+    # Dark green zone (interpolate light green -> dark green)
+    t = np.clip((ndvi[mask_dgreen] - 0.6) / 0.4, 0, 1)
+    rgb[mask_dgreen, 0] = (80 - 55 * t).astype(np.uint8)
+    rgb[mask_dgreen, 1] = (220 - 60 * t).astype(np.uint8)
+    rgb[mask_dgreen, 2] = (100 - 60 * t).astype(np.uint8)
 
     img = Image.fromarray(rgb, mode="RGB")
     img = img.resize((400, 400), Image.NEAREST)
@@ -140,7 +151,7 @@ def compute_zone_statistics(cube: np.ndarray, ndvi: np.ndarray) -> dict:
         zone_ndvi = ndvi[slices["rows"], slices["cols"]]
 
         mean_ndvi = float(np.mean(zone_ndvi))
-        mean_reflectance = [float(np.mean(zone_cube[:, :, b])) for b in range(60)]
+        mean_reflectance = [float(np.mean(zone_cube[:, :, b])) for b in range(cube.shape[2])]
 
         # Classify health
         health = "Unknown"
