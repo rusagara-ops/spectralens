@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import LandingHero from './components/LandingHero'
 import UploadZone from './components/UploadZone'
 import ImageViewer from './components/ImageViewer'
@@ -26,53 +26,77 @@ const ZONE_INFO = [
 export default function App() {
   const [currentView, setCurrentView] = useState('landing')
   const [analysisData, setAnalysisData] = useState(null)
-  const [selectedPixel, setSelectedPixel] = useState(null)
   const [selectedBand, setSelectedBand] = useState(27)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [pixelSpectrum, setPixelSpectrum] = useState(null)
   const [activeTab, setActiveTab] = useState('ndvi')
   const [bandImage, setBandImage] = useState(null)
+  const [bandLoading, setBandLoading] = useState(false)
   const [showUpload, setShowUpload] = useState(false)
-  const [ndviStats, setNdviStats] = useState(null)
+  const [ndviData, setNdviData] = useState(null)
   const [error, setError] = useState(null)
 
-  // Fetch NDVI stats on mount
-  useEffect(() => {
-    if (currentView === 'demo') {
-      fetch('/api/demo/ndvi')
-        .then((r) => r.json())
-        .then(setNdviStats)
-        .catch(console.error)
-    }
-  }, [currentView])
+  // Abort controllers for cancelling stale requests
+  const bandAbort = useRef(null)
+  const pixelAbort = useRef(null)
 
-  // Fetch band image when band changes
+  // Fetch NDVI data once when entering demo view
   useEffect(() => {
     if (currentView !== 'demo') return
-    fetch(`/api/demo/band/${selectedBand}`)
+    fetch('/api/demo/ndvi')
       .then((r) => r.json())
-      .then(setBandImage)
-      .catch(console.error)
+      .then(setNdviData)
+      .catch((err) => console.error('Failed to load NDVI:', err))
+  }, [currentView])
+
+  // Fetch band image when band changes, cancel previous request
+  useEffect(() => {
+    if (currentView !== 'demo') return
+
+    if (bandAbort.current) bandAbort.current.abort()
+    const controller = new AbortController()
+    bandAbort.current = controller
+
+    setBandLoading(true)
+    fetch(`/api/demo/band/${selectedBand}`, { signal: controller.signal })
+      .then((r) => r.json())
+      .then((data) => {
+        setBandImage(data)
+        setBandLoading(false)
+      })
+      .catch((err) => {
+        if (err.name !== 'AbortError') {
+          console.error('Failed to load band:', err)
+          setBandLoading(false)
+        }
+      })
+
+    return () => controller.abort()
   }, [selectedBand, currentView])
 
   // Handle pixel click on NDVI map
   const handlePixelClick = useCallback(async (x, y) => {
-    setSelectedPixel({ x, y })
+    if (pixelAbort.current) pixelAbort.current.abort()
+    const controller = new AbortController()
+    pixelAbort.current = controller
+
     try {
-      const res = await fetch(`/api/demo/pixel-spectrum?x=${x}&y=${y}`)
+      const res = await fetch(`/api/demo/pixel-spectrum?x=${x}&y=${y}`, { signal: controller.signal })
       const data = await res.json()
       setPixelSpectrum(data)
       setActiveTab('spectrum')
     } catch (err) {
-      console.error('Failed to fetch pixel spectrum:', err)
+      if (err.name !== 'AbortError') {
+        console.error('Failed to fetch pixel spectrum:', err)
+      }
     }
   }, [])
 
   // Handle band preset
-  const handlePreset = useCallback(async (type) => {
-    if (type === 'natural') setSelectedBand(15) // 550nm green
-    else if (type === 'vegetation') setSelectedBand(40) // 800nm NIR
-    else if (type === 'mineral') setSelectedBand(10) // 500nm
+  const handlePreset = useCallback((type) => {
+    if (type === 'natural') setSelectedBand(15)
+    else if (type === 'vegetation') setSelectedBand(40)
+    else if (type === 'mineral') setSelectedBand(10)
     setActiveTab('band')
   }, [])
 
@@ -91,7 +115,6 @@ export default function App() {
       setAnalysisData(data)
     } catch (err) {
       setError(err.message)
-      console.error('Analysis failed:', err)
     } finally {
       setIsAnalyzing(false)
     }
@@ -104,7 +127,6 @@ export default function App() {
 
   // Get zone cards from analysis data
   const zoneCards = analysisData?.zones || []
-
   const overallHealth = analysisData?.overall_field_health
 
   // Demo dashboard
@@ -181,7 +203,7 @@ export default function App() {
                   <span className={`text-xl font-bold ${
                     overallHealth >= 60 ? 'text-green-600' : overallHealth >= 40 ? 'text-yellow-600' : overallHealth ? 'text-red-600' : 'text-slate-300'
                   }`}>
-                    {overallHealth != null ? `${overallHealth}%` : '—'}
+                    {overallHealth != null ? `${overallHealth}%` : '\u2014'}
                   </span>
                 </div>
               </div>
@@ -248,7 +270,7 @@ export default function App() {
         {/* Right panel — 60% */}
         <div className="flex-1 flex flex-col min-h-0">
           {/* Tabs */}
-          <div className="flex border-b border-slate-200 bg-white px-5 flex-shrink-0">
+          <div className="flex border-b border-slate-200 bg-white px-5 flex-shrink-0" role="tablist">
             {[
               { id: 'ndvi', label: 'NDVI Map' },
               { id: 'band', label: 'Band View' },
@@ -257,6 +279,8 @@ export default function App() {
             ].map((tab) => (
               <button
                 key={tab.id}
+                role="tab"
+                aria-selected={activeTab === tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === tab.id
@@ -273,16 +297,22 @@ export default function App() {
           <div className="flex-1 p-5 overflow-y-auto">
             {activeTab === 'ndvi' && (
               <div className="max-w-lg mx-auto">
-                <NDVIMap onPixelClick={handlePixelClick} />
+                <NDVIMap ndviData={ndviData} onPixelClick={handlePixelClick} />
               </div>
             )}
 
             {activeTab === 'band' && (
               <div className="max-w-lg mx-auto">
-                <ImageViewer
-                  imageBase64={bandImage?.image_base64}
-                  label={bandImage ? `${bandImage.wavelength_nm}nm — Band ${bandImage.band_index}` : null}
-                />
+                {bandLoading && !bandImage ? (
+                  <div className="w-full aspect-square bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 text-sm animate-pulse">
+                    Loading band...
+                  </div>
+                ) : (
+                  <ImageViewer
+                    imageBase64={bandImage?.image_base64}
+                    label={bandImage ? `${bandImage.wavelength_nm}nm \u2014 Band ${bandImage.band_index}` : null}
+                  />
+                )}
               </div>
             )}
 

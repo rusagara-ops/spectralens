@@ -121,9 +121,9 @@ export default function AIReport({ analysisData, isAnalyzing, onRunAnalysis }) {
           <div className={`text-xs px-3 py-1 rounded-full font-medium ${
             data.confidence === 'High' ? 'bg-green-100 text-green-700' :
             data.confidence === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
-            'bg-red-100 text-red-700'
+            'bg-slate-100 text-slate-600'
           }`}>
-            {data.confidence} Confidence
+            {data.confidence || 'N/A'} Confidence
           </div>
         </div>
       </div>
@@ -131,7 +131,7 @@ export default function AIReport({ analysisData, isAnalyzing, onRunAnalysis }) {
       {/* Executive Summary */}
       <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
         <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Executive Summary</h4>
-        <p className="text-sm text-slate-700 leading-relaxed">{data.executive_summary}</p>
+        <p className="text-sm text-slate-700 leading-relaxed">{data.executive_summary || 'No summary available.'}</p>
       </div>
 
       {/* Overall Health */}
@@ -146,7 +146,7 @@ export default function AIReport({ analysisData, isAnalyzing, onRunAnalysis }) {
             {data.overall_field_health}%
           </div>
           <div className="flex-1">
-            <HealthBar value={data.overall_field_health} />
+            <HealthBar value={data.overall_field_health || 0} />
           </div>
         </div>
       </div>
@@ -195,11 +195,11 @@ export default function AIReport({ analysisData, isAnalyzing, onRunAnalysis }) {
       <div className="grid grid-cols-2 gap-3 pb-4">
         <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
           <h5 className="text-xs font-semibold text-slate-500 uppercase mb-1">Yield Impact</h5>
-          <p className="text-sm text-slate-700">{data.estimated_yield_impact}</p>
+          <p className="text-sm text-slate-700">{data.estimated_yield_impact || 'N/A'}</p>
         </div>
         <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
           <h5 className="text-xs font-semibold text-slate-500 uppercase mb-1">Next Scan</h5>
-          <p className="text-sm text-slate-700">{data.next_scan_recommendation}</p>
+          <p className="text-sm text-slate-700">{data.next_scan_recommendation || 'N/A'}</p>
         </div>
       </div>
     </div>

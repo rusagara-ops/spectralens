@@ -7,9 +7,11 @@ export default function ExportButton({ analysisData }) {
 
   const generateTextReport = () => {
     const d = analysisData
+    const now = new Date().toLocaleString()
     let text = `SPECTRALENS FIELD HEALTH REPORT\n`
-    text += `${'='.repeat(40)}\n\n`
-    text += `EXECUTIVE SUMMARY\n${d.executive_summary}\n\n`
+    text += `${'='.repeat(40)}\n`
+    text += `Generated: ${now}\n\n`
+    text += `EXECUTIVE SUMMARY\n${d.executive_summary || 'N/A'}\n\n`
     text += `OVERALL FIELD HEALTH: ${d.overall_field_health}%\n`
     text += `CONFIDENCE: ${d.confidence}\n\n`
     text += `ZONE ANALYSIS\n${'-'.repeat(30)}\n`
@@ -43,7 +45,7 @@ export default function ExportButton({ analysisData }) {
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(analysisData.executive_summary)
+      await navigator.clipboard.writeText(analysisData.executive_summary || '')
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
