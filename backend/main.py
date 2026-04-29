@@ -7,6 +7,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 
 from demo_data import generate_demo_cube, get_wavelengths, get_zone_labels
 from analysis import (
@@ -19,6 +20,10 @@ from analysis import (
 )
 from ai_interpreter import interpret_field
 from geospatial import get_metadata as get_geo_metadata, pixel_to_wgs84
+from gis_export import (
+    write_geotiff_float32,
+    bundle_zip,
+)
 
 # Load .env from project root
 env_path = Path(__file__).resolve().parent.parent / ".env"
@@ -112,6 +117,18 @@ def false_color(
         "g_nm": WAVELENGTHS[g_band],
         "b_nm": WAVELENGTHS[b_band],
     }
+
+
+@app.get("/api/demo/ndvi.tif")
+def ndvi_geotiff():
+    """Float32 GeoTIFF of the NDVI raster — load directly in QGIS / ArcGIS."""
+    tif = write_geotiff_float32(DEMO_NDVI)
+    bundle = bundle_zip(tif, "spectralens_ndvi")
+    return Response(
+        content=bundle,
+        media_type="application/zip",
+        headers={"Content-Disposition": "attachment; filename=spectralens_ndvi.zip"},
+    )
 
 
 @app.get("/api/demo/ndvi")
