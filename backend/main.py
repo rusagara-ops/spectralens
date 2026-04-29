@@ -18,6 +18,7 @@ from analysis import (
     compute_zone_statistics,
 )
 from ai_interpreter import interpret_field
+from geospatial import get_metadata as get_geo_metadata, pixel_to_wgs84
 
 # Load .env from project root
 env_path = Path(__file__).resolve().parent.parent / ".env"
@@ -66,13 +67,21 @@ def health():
 
 @app.get("/api/demo/cube-info")
 def cube_info():
+    geo = get_geo_metadata()
     return {
         "shape": list(DEMO_CUBE.shape),
         "wavelengths": WAVELENGTHS,
         "band_count": BAND_COUNT,
-        "spatial_resolution": "0.1m per pixel (simulated)",
+        "spatial_resolution": f"{geo['pixel_size_m']}m per pixel",
         "sensor": "Demo VNIR Sensor (400-1000nm)",
+        "geospatial": geo,
     }
+
+
+@app.get("/api/demo/geospatial")
+def geospatial_metadata():
+    """CRS, bounds, pixel size — everything a GIS tool needs to load the data."""
+    return get_geo_metadata()
 
 
 @app.get("/api/demo/band/{band_index}")
@@ -124,6 +133,9 @@ def pixel_spectrum(
     data = get_pixel_spectrum(DEMO_CUBE, x, y, WAVELENGTHS)
     data["x"] = x
     data["y"] = y
+    lat, lon = pixel_to_wgs84(x, y)
+    data["lat"] = lat
+    data["lon"] = lon
     return data
 
 
