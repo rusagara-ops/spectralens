@@ -23,9 +23,9 @@ from ai_interpreter import interpret_field
 env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(env_path)
 
-if not os.getenv("ANTHROPIC_API_KEY"):
-    print("\n  WARNING: ANTHROPIC_API_KEY not set. AI analysis will fail.")
-    print("  Add your key to spectralens/.env\n")
+if not (os.getenv("ANTHROPIC_API_KEY") or os.getenv("GEMINI_API_KEY")):
+    print("\n  WARNING: No AI API key set. AI analysis will fail.")
+    print("  Add ANTHROPIC_API_KEY or GEMINI_API_KEY to spectralens/.env\n")
 
 app = FastAPI(title="SpectraLens API", version="1.0.0")
 

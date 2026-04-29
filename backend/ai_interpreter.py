@@ -1,7 +1,10 @@
-"""Claude API integration for SpectraLens field analysis."""
+"""AI integration for SpectraLens field analysis."""
 
 import json
+import os
 import re
+import urllib.error
+import urllib.request
 import anthropic
 
 
@@ -42,9 +45,58 @@ def _validate_report(data):
     return data
 
 
+def _available_provider():
+    """Return the first configured AI provider."""
+    if os.getenv("ANTHROPIC_API_KEY"):
+        return "anthropic"
+    if os.getenv("GEMINI_API_KEY"):
+        return "gemini"
+    return None
+
+
+def _call_anthropic(user_prompt):
+    client = anthropic.Anthropic()
+    message = client.messages.create(
+        model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
+        max_tokens=1500,
+        system=SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": user_prompt}],
+    )
+    return message.content[0].text
+
+
+def _call_gemini(user_prompt):
+    api_key = os.getenv("GEMINI_API_KEY")
+    model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+    payload = {
+        "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+        "contents": [{"role": "user", "parts": [{"text": user_prompt}]}],
+        "generationConfig": {
+            "maxOutputTokens": 1500,
+            "responseMimeType": "application/json",
+        },
+    }
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        result = json.loads(response.read().decode("utf-8"))
+
+    candidates = result.get("candidates", [])
+    if not candidates:
+        raise RuntimeError("Gemini returned no response candidates.")
+
+    parts = candidates[0].get("content", {}).get("parts", [])
+    return "".join(part.get("text", "") for part in parts)
+
+
 async def interpret_field(zone_stats: dict, wavelengths: list, ndvi_stats: dict) -> dict:
     """
-    Call Claude API with structured agronomic context.
+    Call the configured AI API with structured agronomic context.
     Returns parsed JSON analysis report.
     """
     user_prompt = f"""Analyze the following hyperspectral drone imagery data from a corn field and provide a detailed crop health report.
@@ -85,21 +137,29 @@ Based on this spectral data, return a JSON object with exactly this structure:
 
 Return ONLY the JSON object, nothing else."""
 
+    provider = _available_provider()
+    if not provider:
+        return _validate_report({"executive_summary": "No AI API key configured. Add ANTHROPIC_API_KEY or GEMINI_API_KEY to your .env file."})
+
     try:
-        client = anthropic.Anthropic()
-        message = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=1500,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_prompt}],
-        )
-        response_text = message.content[0].text
+        if provider == "anthropic":
+            response_text = _call_anthropic(user_prompt)
+        else:
+            response_text = _call_gemini(user_prompt)
     except anthropic.APIConnectionError:
         return _validate_report({"executive_summary": "Could not connect to AI service. Check your internet connection."})
     except anthropic.AuthenticationError:
         return _validate_report({"executive_summary": "Invalid API key. Check ANTHROPIC_API_KEY in your .env file."})
     except anthropic.RateLimitError:
         return _validate_report({"executive_summary": "API rate limit reached. Please try again in a moment."})
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            return _validate_report({"executive_summary": "Invalid API key. Check GEMINI_API_KEY in your .env file."})
+        if e.code == 429:
+            return _validate_report({"executive_summary": "API rate limit reached. Please try again in a moment."})
+        return _validate_report({"executive_summary": f"Gemini API request failed with HTTP {e.code}."})
+    except urllib.error.URLError:
+        return _validate_report({"executive_summary": "Could not connect to AI service. Check your internet connection."})
     except Exception as e:
         return _validate_report({"executive_summary": f"AI analysis failed: {str(e)}"})
 
