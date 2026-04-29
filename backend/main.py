@@ -22,6 +22,7 @@ from ai_interpreter import interpret_field
 from geospatial import get_metadata as get_geo_metadata, pixel_to_wgs84
 from gis_export import (
     write_geotiff_float32,
+    write_geotiff_multiband,
     bundle_zip,
 )
 
@@ -99,6 +100,33 @@ def get_band(band_index: int):
         "wavelength_nm": WAVELENGTHS[band_index],
         "band_index": band_index,
     }
+
+
+@app.get("/api/demo/band/{band_index}.tif")
+def band_geotiff(band_index: int):
+    """Single-band GeoTIFF — float32 reflectance values, georeferenced."""
+    if band_index < 0 or band_index >= BAND_COUNT:
+        raise HTTPException(status_code=400, detail=f"band_index must be 0-{BAND_COUNT - 1}")
+    tif = write_geotiff_float32(DEMO_CUBE[:, :, band_index])
+    wl = int(WAVELENGTHS[band_index])
+    bundle = bundle_zip(tif, f"spectralens_band_{band_index:02d}_{wl}nm")
+    return Response(
+        content=bundle,
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename=spectralens_band_{band_index:02d}_{wl}nm.zip"},
+    )
+
+
+@app.get("/api/demo/cube.tif")
+def cube_geotiff():
+    """Full hyperspectral cube as a multi-band GeoTIFF (60 bands, 400-1000nm)."""
+    tif = write_geotiff_multiband(DEMO_CUBE)
+    bundle = bundle_zip(tif, "spectralens_cube")
+    return Response(
+        content=bundle,
+        media_type="application/zip",
+        headers={"Content-Disposition": "attachment; filename=spectralens_cube.zip"},
+    )
 
 
 @app.get("/api/demo/false-color")

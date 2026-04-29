@@ -110,6 +110,31 @@ def write_geotiff_uint8(arr: np.ndarray) -> bytes:
     return buf.getvalue()
 
 
+def write_geotiff_multiband(cube: np.ndarray) -> bytes:
+    """Write a multi-band float32 GeoTIFF — all spectral bands in one file.
+
+    Encoded as a multipage TIFF where each page is one band. QGIS treats this
+    as a single raster with N bands, which is the standard hyperspectral pattern.
+    """
+    if cube.ndim != 3:
+        raise ValueError("write_geotiff_multiband expects a (H, W, B) array")
+
+    h, w, n_bands = cube.shape
+    geo_ifd = _build_geo_ifd()
+
+    pages = [Image.fromarray(cube[:, :, b].astype(np.float32), mode="F") for b in range(n_bands)]
+    buf = io.BytesIO()
+    pages[0].save(
+        buf,
+        format="TIFF",
+        save_all=True,
+        append_images=pages[1:],
+        tiffinfo=geo_ifd,
+        compression="tiff_deflate",
+    )
+    return buf.getvalue()
+
+
 def write_geotiff_rgb(arr: np.ndarray) -> bytes:
     """Write a 3-band RGB GeoTIFF — for false-color and styled NDVI maps."""
     if arr.ndim != 3 or arr.shape[2] != 3:
