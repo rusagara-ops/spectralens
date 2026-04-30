@@ -26,6 +26,7 @@ from gis_export import (
     bundle_zip,
 )
 from vector_export import zones_to_geojson_bytes
+from indices import INDEX_FUNCS, INDEX_DESCRIPTIONS, compute as compute_index
 
 # Load .env from project root
 env_path = Path(__file__).resolve().parent.parent / ".env"
@@ -168,6 +169,55 @@ def ndvi_map():
         "mean_ndvi": round(float(DEMO_NDVI.mean()), 4),
         "min_ndvi": round(float(DEMO_NDVI.min()), 4),
         "max_ndvi": round(float(DEMO_NDVI.max()), 4),
+    }
+
+
+@app.get("/api/demo/indices")
+def list_indices():
+    """List all supported vegetation indices."""
+    return {
+        "indices": [
+            {"name": name, "description": INDEX_DESCRIPTIONS[name]}
+            for name in INDEX_FUNCS
+        ]
+    }
+
+
+@app.get("/api/demo/index/{name}.tif")
+def index_geotiff(name: str):
+    """Compute a vegetation index and return as a georeferenced GeoTIFF."""
+    if name.lower() not in INDEX_FUNCS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown index '{name}'. Options: {list(INDEX_FUNCS)}",
+        )
+    arr = compute_index(name, DEMO_CUBE, WAVELENGTHS)
+    tif = write_geotiff_float32(arr)
+    bundle = bundle_zip(tif, f"spectralens_{name.lower()}")
+    return Response(
+        content=bundle,
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename=spectralens_{name.lower()}.zip"},
+    )
+
+
+@app.get("/api/demo/index/{name}/stats")
+def index_stats(name: str):
+    """Summary statistics for a vegetation index across the field."""
+    if name.lower() not in INDEX_FUNCS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown index '{name}'. Options: {list(INDEX_FUNCS)}",
+        )
+    arr = compute_index(name, DEMO_CUBE, WAVELENGTHS)
+    import numpy as np
+    return {
+        "name": name.lower(),
+        "description": INDEX_DESCRIPTIONS[name.lower()],
+        "mean": round(float(np.mean(arr)), 4),
+        "min": round(float(np.min(arr)), 4),
+        "max": round(float(np.max(arr)), 4),
+        "std": round(float(np.std(arr)), 4),
     }
 
 
