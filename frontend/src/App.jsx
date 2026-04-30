@@ -5,6 +5,7 @@ import ImageViewer from './components/ImageViewer'
 import BandSlider from './components/BandSlider'
 import SpectrumChart from './components/SpectrumChart'
 import NDVIMap from './components/NDVIMap'
+import GeoMapView from './components/GeoMapView'
 import AIReport from './components/AIReport'
 import ExportButton from './components/ExportButton'
 
@@ -273,6 +274,7 @@ export default function App() {
           <div className="flex border-b border-slate-200 bg-white px-5 flex-shrink-0" role="tablist">
             {[
               { id: 'ndvi', label: 'NDVI Map' },
+              { id: 'geomap', label: 'Geo Map' },
               { id: 'band', label: 'Band View' },
               { id: 'spectrum', label: 'Spectrum' },
               { id: 'report', label: 'AI Report' },
@@ -298,6 +300,12 @@ export default function App() {
             {activeTab === 'ndvi' && (
               <div className="max-w-lg mx-auto">
                 <NDVIMap ndviData={ndviData} onPixelClick={handlePixelClick} />
+              </div>
+            )}
+
+            {activeTab === 'geomap' && (
+              <div className="max-w-3xl mx-auto">
+                <GeoMapView ndviData={ndviData} onPixelClick={handlePixelClick} />
               </div>
             )}
 
