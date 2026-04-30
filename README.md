@@ -73,7 +73,11 @@ spectralens/
 │   ├── main.py               # FastAPI routes and server config
 │   ├── demo_data.py          # Synthetic hyperspectral data generator
 │   ├── analysis.py           # NDVI, spectral analysis, image rendering
-│   ├── ai_interpreter.py     # Claude API integration
+│   ├── indices.py            # Vegetation index library (NDRE, GNDVI, SAVI, EVI, MSAVI)
+│   ├── geospatial.py         # CRS, bounds, pixel <-> world transforms
+│   ├── gis_export.py         # GeoTIFF / TFW / PRJ writers
+│   ├── vector_export.py      # GeoJSON FeatureCollection builder
+│   ├── ai_interpreter.py     # Claude / Gemini API integration
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
@@ -81,6 +85,7 @@ spectralens/
 │   │   └── components/
 │   │       ├── LandingHero.jsx
 │   │       ├── NDVIMap.jsx
+│   │       ├── GeoMapView.jsx  # Leaflet map with NDVI overlay + zone polygons
 │   │       ├── SpectrumChart.jsx
 │   │       ├── BandSlider.jsx
 │   │       ├── AIReport.jsx
@@ -90,19 +95,74 @@ spectralens/
 │   ├── index.html
 │   ├── vite.config.js
 │   └── package.json
+├── qgis/
+│   ├── spectralens_ndvi.qml      # Raster pseudocolor style
+│   ├── spectralens_zones.qml     # Vector categorized style
+│   ├── load_in_qgis.py           # PyQGIS one-click loader
+│   └── download_outputs.py       # Standalone bulk downloader
 ├── start.sh                  # Single command to run everything
 └── .env                      # API keys (not committed)
 ```
+
+## QGIS Integration
+
+SpectraLens is **GIS-native** — every analysis output is georeferenced and exportable to QGIS, ArcGIS, or any tool that reads GeoTIFF / GeoJSON.
+
+The demo plot is anchored to a real-world location near Ames, Iowa, projected in **UTM Zone 15N (EPSG:32615)** with a 0.5 m pixel size. This means everything you produce drops onto a satellite basemap at the right scale.
+
+### What you can pull into QGIS
+
+| Output | Endpoint | Format |
+|--------|----------|--------|
+| NDVI raster | `/api/demo/ndvi.tif` | Float32 GeoTIFF (.zip with .tif/.tfw/.prj) |
+| Single spectral band | `/api/demo/band/{i}.tif` | Float32 GeoTIFF |
+| Full hyperspectral cube | `/api/demo/cube.tif` | 60-band GeoTIFF |
+| Vegetation index (NDRE/GNDVI/SAVI/EVI/MSAVI) | `/api/demo/index/{name}.tif` | Float32 GeoTIFF |
+| Health zones | `/api/demo/zones.geojson` | GeoJSON FeatureCollection |
+| Geospatial metadata | `/api/demo/geospatial` | JSON (CRS, bounds, geotransform) |
+
+### One-click load (PyQGIS)
+
+With the backend running, open QGIS, then `Plugins > Python Console > Show Editor`, open `qgis/load_in_qgis.py`, and run. The script:
+
+1. Sets the project CRS to UTM Zone 15N.
+2. Downloads NDVI, the full hyperspectral cube, and all five vegetation indices as GeoTIFFs.
+3. Loads them as raster layers with the `qgis/spectralens_ndvi.qml` pseudocolor style applied.
+4. Loads the zones GeoJSON as a vector layer with a categorized renderer (`qgis/spectralens_zones.qml`).
+5. Frames the map canvas to the field bounds.
+
+### Standalone download (no QGIS dependency)
+
+```bash
+python qgis/download_outputs.py --api http://localhost:8000 --out ./gis_out
+```
+
+Drops every layer as `.tif` / `.geojson` / `.tfw` / `.prj` into `./gis_out`. Open them in QGIS, ArcGIS Pro, GDAL, or any GIS tool.
+
+### Layer styles
+
+- `qgis/spectralens_ndvi.qml` — Red-Yellow-Green pseudocolor for NDVI / index rasters (-0.2 to 0.9).
+- `qgis/spectralens_zones.qml` — Categorized fill by `classification` attribute (Healthy → Pest Damage), with auto labels showing `Zone X — NDVI 0.83`.
+
+QGIS auto-loads a `.qml` placed alongside the data file with the same basename. Otherwise: `Layer Properties > Symbology > Style > Load Style`.
 
 ## API Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/health` | Server health check |
-| GET | `/api/demo/cube-info` | Hyperspectral cube metadata |
-| GET | `/api/demo/band/{index}` | Single band image (0-59) |
+| GET | `/api/demo/cube-info` | Hyperspectral cube metadata (incl. geospatial block) |
+| GET | `/api/demo/geospatial` | CRS, bounds, geotransform |
+| GET | `/api/demo/band/{index}` | Single band PNG preview |
+| GET | `/api/demo/band/{index}.tif` | Single band GeoTIFF (zipped with sidecars) |
+| GET | `/api/demo/cube.tif` | Multi-band GeoTIFF (60 bands) |
 | GET | `/api/demo/false-color` | False color composite |
-| GET | `/api/demo/ndvi` | NDVI map with statistics |
+| GET | `/api/demo/ndvi` | NDVI map PNG with statistics |
+| GET | `/api/demo/ndvi.tif` | NDVI as float32 GeoTIFF |
+| GET | `/api/demo/indices` | List supported vegetation indices |
+| GET | `/api/demo/index/{name}.tif` | NDRE/GNDVI/SAVI/EVI/MSAVI GeoTIFF |
+| GET | `/api/demo/index/{name}/stats` | Mean/min/max/std for an index |
+| GET | `/api/demo/zones.geojson` | Health zones as GeoJSON |
 | GET | `/api/demo/pixel-spectrum?x=&y=` | Pixel spectral signature |
 | POST | `/api/demo/analyze` | AI-powered field analysis |
 | POST | `/api/upload` | File upload (future feature) |
