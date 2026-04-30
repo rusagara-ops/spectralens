@@ -25,6 +25,7 @@ from gis_export import (
     write_geotiff_multiband,
     bundle_zip,
 )
+from vector_export import zones_to_geojson_bytes
 
 # Load .env from project root
 env_path = Path(__file__).resolve().parent.parent / ".env"
@@ -168,6 +169,17 @@ def ndvi_map():
         "min_ndvi": round(float(DEMO_NDVI.min()), 4),
         "max_ndvi": round(float(DEMO_NDVI.max()), 4),
     }
+
+
+@app.get("/api/demo/zones.geojson")
+def zones_geojson():
+    """GeoJSON FeatureCollection of health zones — drop into QGIS as a vector layer."""
+    payload = zones_to_geojson_bytes(DEMO_CUBE, DEMO_NDVI)
+    return Response(
+        content=payload,
+        media_type="application/geo+json",
+        headers={"Content-Disposition": "attachment; filename=spectralens_zones.geojson"},
+    )
 
 
 @app.get("/api/demo/pixel-spectrum")
